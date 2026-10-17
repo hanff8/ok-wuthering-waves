@@ -202,7 +202,13 @@ class NightmareNestTask(WWOneTimeTask, BaseCombatTask):
             self.log_info(f'nightmare nest unreachable, skip this run: {nest.cache_key}')
         else:
             self.log_info('nightmare nest unreachable, skip this run')
+        # esc 只关掉详情页，图鉴（挂在地图上）还开着；日常任务里 DailyTask 把 ensure_main 劫持成空实现，
+        # 所以下一轮 openF2Book 既不会补 esc 也不会发 f2（in_team_and_world 为假），wait_book(0.3) 还会把
+        # 正在关闭的图鉴图标当成打开成功（实测 conf=39），之后所有页签都是空扫描、整个梦魇步骤白跑，
+        # 下一个任务还得自己按 esc 回主世界。这里先按 esc 并等回到主世界，再继续下一个巢穴。
         self.back(after_sleep=1)
+        if not self.wait_in_team_and_world(time_out=10, raise_if_not_found=False, esc=True):
+            self.log_info('not back in world after skipping this nest, continue anyway')
         return False
 
     def _find_travel_button(self):

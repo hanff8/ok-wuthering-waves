@@ -110,7 +110,8 @@ class TestNightmareNestTask(unittest.TestCase):
         self.assertIn(target.cache_key, task._unreachable_nests)
         self.assertEqual([1], wait_timeouts)
         self.assertEqual([(travel, {'after_sleep': 1})], clicks)
-        self.assertEqual([], world_waits)
+        # 跳过后必须自己退回主世界：日常任务里 ensure_main 被劫持，下一轮 openF2Book 不会补 esc / 不会发 f2
+        self.assertEqual([{'time_out': 10, 'raise_if_not_found': False, 'esc': True}], world_waits)
         self.assertEqual([{'after_sleep': 1}], backs)
 
     def test_fast_travel_unavailable_skips_nest_without_clicking_travel(self):
@@ -119,8 +120,10 @@ class TestNightmareNestTask(unittest.TestCase):
         backs = []
         clicks = []
         waits = []
+        world_waits = []
 
         task.is_fast_travel_unavailable = lambda: True
+        task.wait_in_team_and_world = lambda *args, **kwargs: world_waits.append(kwargs) or False
         task.wait_until = lambda *args, **kwargs: waits.append(kwargs)
         task.click = lambda *args, **kwargs: clicks.append((args, kwargs))
         task.back = lambda *args, **kwargs: backs.append(kwargs)
@@ -133,6 +136,23 @@ class TestNightmareNestTask(unittest.TestCase):
         self.assertEqual([], clicks)
         self.assertEqual([], waits)
         self.assertEqual([{'after_sleep': 1}], backs)
+        self.assertEqual([{'time_out': 10, 'raise_if_not_found': False, 'esc': True}], world_waits)
+
+    def test_skip_logs_and_continues_when_world_wait_times_out(self):
+        # 回主世界失败（10 秒超时）也不能卡住日常流程：记一条日志后继续下一个巢穴
+        task = NightmareNestTask.__new__(NightmareNestTask)
+        task._unreachable_nests = set()
+        logs = []
+
+        task.wait_in_team_and_world = lambda *args, **kwargs: False
+        task.back = lambda *args, **kwargs: None
+        task.log_info = lambda message, **kwargs: logs.append(message)
+
+        target = NestTarget(object(), 'go_nest:48:18')
+
+        self.assertFalse(task._skip_unreachable_nest(target))
+        self.assertIn(target.cache_key, task._unreachable_nests)
+        self.assertIn('not back in world after skipping this nest, continue anyway', logs)
 
     def test_combat_nest_skips_unreachable_nest_before_waiting_for_travel_feature(self):
         # 日常任务的两条路径都走 combat_nest：条件1 run_task_by_class -> run()，条件2 run_capture_mode()
@@ -143,9 +163,11 @@ class TestNightmareNestTask(unittest.TestCase):
         logs = []
         feature_waits = []
         combat_calls = []
+        world_waits = []
 
         task.click = lambda *args, **kwargs: None
         task.is_fast_travel_unavailable = lambda: True
+        task.wait_in_team_and_world = lambda *args, **kwargs: world_waits.append(kwargs) or False
         task.wait_feature = lambda *args, **kwargs: feature_waits.append(kwargs)
         task.back = lambda *args, **kwargs: backs.append(kwargs)
         task.log_info = lambda message, **kwargs: logs.append(message)
@@ -159,6 +181,7 @@ class TestNightmareNestTask(unittest.TestCase):
         self.assertEqual([], feature_waits)
         self.assertEqual([], combat_calls)
         self.assertEqual([{'after_sleep': 1}], backs)
+        self.assertEqual([{'time_out': 10, 'raise_if_not_found': False, 'esc': True}], world_waits)
         self.assertIn('nearby beacon cannot be fast traveled, skip this nest', logs)
         self.assertIn('nightmare nest unreachable, skip this run: go_nest:48:18', logs)
 
