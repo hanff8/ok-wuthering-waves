@@ -1,5 +1,9 @@
 import unittest
 import re
+from unittest.mock import patch
+
+import numpy as np
+from ok.feature.Box import relative_box
 
 from src.task.BaseCombatTask import CharRevivedException
 from src.task.NightmareNestTask import NestTarget, NightmareNestTask
@@ -56,6 +60,7 @@ class TestNightmareNestTask(unittest.TestCase):
                 combat_results = iter([True, False])
 
                 task.click = lambda *args, **kwargs: None
+                task.is_fast_travel_unavailable = lambda: False
                 task.wait_feature = lambda *args, **kwargs: FakeBox(feature_name)
                 task.click_team_challenge = lambda: None
                 task.wait_in_team_and_world = lambda *args, **kwargs: True
@@ -91,6 +96,7 @@ class TestNightmareNestTask(unittest.TestCase):
         world_waits = []
         travel = FakeBox('fast_travel_custom')
 
+        task.is_fast_travel_unavailable = lambda: False
         task.wait_until = lambda *args, **kwargs: wait_timeouts.append(kwargs['time_out']) or travel
         task.find_one = lambda name, **kwargs: travel if name == travel.name else None
         task.click = lambda box, **kwargs: clicks.append((box, kwargs))
@@ -107,6 +113,73 @@ class TestNightmareNestTask(unittest.TestCase):
         self.assertEqual([], world_waits)
         self.assertEqual([{'after_sleep': 1}], backs)
 
+    def test_fast_travel_unavailable_skips_nest_without_clicking_travel(self):
+        task = NightmareNestTask.__new__(NightmareNestTask)
+        task._unreachable_nests = set()
+        backs = []
+        clicks = []
+        waits = []
+
+        task.is_fast_travel_unavailable = lambda: True
+        task.wait_until = lambda *args, **kwargs: waits.append(kwargs)
+        task.click = lambda *args, **kwargs: clicks.append((args, kwargs))
+        task.back = lambda *args, **kwargs: backs.append(kwargs)
+        task.log_info = lambda *args, **kwargs: None
+
+        target = NestTarget(object(), 'go_nightmare:48:18')
+
+        self.assertFalse(task._travel_to_nest_or_skip(target))
+        self.assertIn(target.cache_key, task._unreachable_nests)
+        self.assertEqual([], clicks)
+        self.assertEqual([], waits)
+        self.assertEqual([{'after_sleep': 1}], backs)
+
+    def test_combat_nest_skips_unreachable_nest_before_waiting_for_travel_feature(self):
+        # 日常任务的两条路径都走 combat_nest：条件1 run_task_by_class -> run()，条件2 run_capture_mode()
+        # 红条出现时只剩一个禁用的「前往」，必须在这里就跳过，不能让 wait_feature 抛错中断整个梦魇步骤
+        task = NightmareNestTask.__new__(NightmareNestTask)
+        task._unreachable_nests = set()
+        backs = []
+        logs = []
+        feature_waits = []
+        combat_calls = []
+
+        task.click = lambda *args, **kwargs: None
+        task.is_fast_travel_unavailable = lambda: True
+        task.wait_feature = lambda *args, **kwargs: feature_waits.append(kwargs)
+        task.back = lambda *args, **kwargs: backs.append(kwargs)
+        task.log_info = lambda message, **kwargs: logs.append(message)
+        task.combat_once = lambda **kwargs: combat_calls.append(kwargs)
+
+        nest = NestTarget(object(), 'go_nest:48:18')
+
+        task.combat_nest(nest)
+
+        self.assertIn(nest.cache_key, task._unreachable_nests)
+        self.assertEqual([], feature_waits)
+        self.assertEqual([], combat_calls)
+        self.assertEqual([{'after_sleep': 1}], backs)
+        self.assertIn('nearby beacon cannot be fast traveled, skip this nest', logs)
+        self.assertIn('nightmare nest unreachable, skip this run: go_nest:48:18', logs)
+
+    def test_fast_travel_unavailable_detects_red_warning_bar(self):
+        width, height = 1280, 720
+        task = NightmareNestTask.__new__(NightmareNestTask)
+        frame = np.full((height, width, 3), (164, 165, 165), dtype=np.uint8)
+        # 出现残象缩略图上的小红块不应被当成警告条
+        frame[int(0.74 * height):int(0.78 * height), int(0.70 * width):int(0.72 * width)] = (80, 80, 190)
+        task.box_of_screen = lambda x, y, to_x=1.0, to_y=1.0, **kwargs: relative_box(
+            width, height, x, y, to_x=to_x, to_y=to_y, **kwargs)
+        task.width_of_screen = lambda percent: round(percent * width)
+        task.height_of_screen = lambda percent: round(percent * height)
+
+        with patch.object(NightmareNestTask, 'frame', frame):
+            self.assertFalse(task.is_fast_travel_unavailable())
+
+            frame[int(0.8465 * height):int(0.8861 * height), int(0.6875 * width):int(0.977 * width)] = (96, 96, 192)
+
+            self.assertTrue(task.is_fast_travel_unavailable())
+
     def test_nest_is_skipped_after_max_deaths(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
         task._capture_mode = False
@@ -119,6 +192,7 @@ class TestNightmareNestTask(unittest.TestCase):
             raise CharRevivedException('char dead')
 
         task.click = lambda *args, **kwargs: None
+        task.is_fast_travel_unavailable = lambda: False
         task.wait_feature = lambda *args, **kwargs: FakeBox('team_close')
         task.click_team_challenge = lambda: None
         task.wait_in_team_and_world = lambda *args, **kwargs: True
@@ -140,6 +214,7 @@ class TestNightmareNestTask(unittest.TestCase):
         travel = FakeBox('fast_travel_custom')
         world_waits = []
 
+        task.is_fast_travel_unavailable = lambda: False
         task.wait_until = lambda *args, **kwargs: travel
         task.find_one = lambda *args, **kwargs: None
         task.click = lambda *args, **kwargs: None
