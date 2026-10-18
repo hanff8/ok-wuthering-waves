@@ -45,7 +45,7 @@ class TestTacetDeathReentry(unittest.TestCase):
                      'wait_click_skip_dialog_confirm'):
             setattr(task, name, noop)
         task.get_stamina = lambda: (120, 0, 120)
-        task.teleport_to_tacet = lambda index: task.teleports.append(index)
+        task.teleport_to_tacet = lambda index: task.teleports.append(index) or True
         task.has_claim_stamina = lambda: True
         task.use_stamina = lambda once, must_use: (False, once)
         task.log_info = lambda message, **kwargs: task.logs.append(message)
