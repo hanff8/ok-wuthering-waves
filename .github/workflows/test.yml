@@ -3,6 +3,10 @@ name: Run Tests
 on:
   pull_request:
     types: [ opened, synchronize ]
+  # fork 里需要 push 到 master 也跑一遍，便于确认合并后的 master 是绿的
+  push:
+    branches: [ master ]
+  workflow_dispatch:
 
 permissions:
   contents: read
