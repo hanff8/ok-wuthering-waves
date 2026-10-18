@@ -1,13 +1,14 @@
 name: Windows Release
 run-name: Windows release · ${{ github.ref_name }}
 
-# fork 版发布流水线：测试 → 构建未签名安装包 → 发布到本仓库 Releases。
+# fork 版发布流水线：测试 → 同步更新仓库 → 构建未签名安装包 → 发布到本仓库 Releases。
+# pyappify 启动器安装/更新时 clone 的是 pyappify.yml 里的 git_url，也就是 hanff8/ok-ww-update；
+# 所以 synchronize job 必须先把代码推过去，否则装完运行的仍是上游代码（版本也会显示上游的）。
 # 与上游 ok-oldking/ok-wuthering-waves 的 build.yml 相比，去掉了 fork 里不可能工作的部分：
-#   1. synchronize job：上游用 CNB_TOKEN / OK_GH 把代码同步到 ok-oldking 的更新仓库（cnb.cool、ok-ww-update）
+#   1. 同步目标从 cnb.cool/ok-oldking/* + ok-ww-update 换成本 fork 的 hanff8/ok-ww-update（用 SYNC_TOKEN）
 #   2. SignPath 代码签名：证书与组织属于上游，fork 没有 SIGNPATH_API_TOKEN
 #   3. publish 末尾触发 MirrorChyan 分发工作流
-# 因此产物是未签名安装包；应用内自动更新仍指向上游更新仓库（pyappify.yml 的 git_url），
-# 若要让更新只跟随本 fork，需要另建更新仓库并恢复同步 job。
+# 因此产物是未签名安装包。
 
 on:
   push:
@@ -104,9 +105,64 @@ jobs:
             }
           }
 
-  package:
-    name: 2 · Build installers
+  # 把 deploy.txt 列出的文件（含 inline_ok_requirements 生成的 ok/、pyappify/ 与写好版本的 config.py）
+  # 同步到本 fork 的更新仓库。pyappify 启动器安装时 clone 的正是这个仓库，所以这一步是
+  # 「装完跑的是哪份代码」的唯一 owner，缺了它安装包会退回上游更新源。
+  synchronize:
+    name: 2 · Synchronize update repo
     needs: validate
+    runs-on: windows-latest
+
+    steps:
+      - name: Configure runner
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          git config --global user.email "hanff8@users.noreply.github.com"
+          git config --global user.name "hanff8"
+
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+          lfs: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install ".[dev]"
+
+      - name: Prepare release requirements
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python -m ok.update.inline_ok_requirements --tag "$env:RELEASE_TAG"
+
+      - name: Synchronize update repository
+        uses: ok-oldking/partial-sync-repo@master
+        with:
+          repos: |
+            https://hanff8:${{ secrets.SYNC_TOKEN }}@github.com/hanff8/ok-ww-update.git
+          sync_list: 'deploy.txt'
+          tag: ${{ github.ref_name }}
+          gitignore_file: '.update_repo_gitignore'
+          show_author: true
+
+  package:
+    name: 3 · Build installers
+    needs: synchronize
     runs-on: windows-latest
 
     steps:
@@ -163,8 +219,8 @@ jobs:
           retention-days: 7
 
   publish:
-    name: 3 · Publish release
-    needs: [ validate, package ]
+    name: 4 · Publish release
+    needs: [ synchronize, package ]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
 
