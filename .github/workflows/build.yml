@@ -173,6 +173,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          # 不取 tags 的话 git describe 找不到上一个版本，更新日志会退化成整段历史
+          fetch-tags: true
 
       - name: Determine version type
         id: version
