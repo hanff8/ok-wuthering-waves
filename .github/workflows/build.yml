@@ -195,14 +195,16 @@ jobs:
           else
             range="$previous..$current"
           fi
+          # 不要用 `git log | head`：runner 的 bash 开了 pipefail，head 提前关管道会让
+          # git log 以 SIGPIPE(141) 退出，整个 step 失败并截断下面的 heredoc。
+          changes=$(git log --no-merges --max-count=50 --pretty=format:'- %s (%h)' "$range")
           {
             echo "changes<<EOF"
-            git log --no-merges --pretty=format:'- %s (%h)' "$range" | head -n 50
-            echo
+            printf '%s\n' "$changes"
             echo "EOF"
+            echo "previous=$previous"
+            echo "range=$range"
           } >> "$GITHUB_OUTPUT"
-          echo "previous=$previous" >> "$GITHUB_OUTPUT"
-          echo "range=$range" >> "$GITHUB_OUTPUT"
 
       - name: Download release assets
         uses: actions/download-artifact@v4
