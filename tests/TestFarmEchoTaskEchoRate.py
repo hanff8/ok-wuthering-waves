@@ -63,7 +63,14 @@ class TestFarmEchoTaskEchoRate(unittest.TestCase):
     def test_retry_after_claim_popup_keeps_the_start_time(self, _):
         task = FakeFarmEchoTask(fail_first=True)
 
-        task.run()
+        # The exception raised by FakeFarmEchoTask is the claim popup this test is
+        # about, so FarmEchoTask.run logs it at ERROR level. On CI that traceback is
+        # reported as a failure annotation on the run, which reads like a broken
+        # test; keep the expected log quiet and assert that the error path ran.
+        with patch('src.task.FarmEchoTask.logger') as farm_logger:
+            task.run()
+
+        farm_logger.error.assert_called_once()
 
         # two echoes in about an hour; restarting the clock on the retry
         # would report 7200
