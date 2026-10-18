@@ -2,13 +2,19 @@ import re
 import cv2
 from dataclasses import dataclass
 
-from ok import Logger
+from ok import Logger, find_color_rectangles
 from src.task.BaseCombatTask import BaseCombatTask, CharRevivedException
 from src.task.WWOneTimeTask import WWOneTimeTask
 
 logger = Logger.get_logger(__name__)
 TRAVEL_FEATURES = ['fast_travel_custom', 'gray_teleport', 'remove_custom']
 CONFIRM_FEATURES = ['confirm_btn_hcenter_vcenter', 'confirm_btn_highlight_hcenter_vcenter']
+# 图鉴详情页显示「附近信标无法快速到达」时，前往按钮被禁用并弹出这条红色警告条，此时该聚落无法传送
+travel_unavailable_color = {
+    'r': (160, 240),
+    'g': (60, 150),
+    'b': (60, 150)
+}
 
 
 @dataclass
@@ -84,6 +90,12 @@ class NightmareNestTask(WWOneTimeTask, BaseCombatTask):
     def combat_nest(self, nest):
         target_box = nest.box if isinstance(nest, NestTarget) else nest
         self.click(target_box, after_sleep=2)
+        # 详情页提示「附近信标无法快速到达」时只有禁用的「前往」，下面等待传送特征会直接抛错中断整个梦魇步骤
+        # （日常任务里会被兜底成 NightmareNestTask Failed 并截图跳过全部巢穴），所以先判定并跳到下一个聚落
+        if self.is_fast_travel_unavailable():
+            self.log_info('nearby beacon cannot be fast traveled, skip this nest')
+            self._skip_unreachable_nest(nest)
+            return
         feature = self.wait_feature(['fast_travel_custom', 'gray_teleport', 'remove_custom', 'team_close'], time_out=10,
                                     settle_time=0.5, raise_if_not_found=True)
         is_team = feature.name == 'team_close'
@@ -161,6 +173,9 @@ class NightmareNestTask(WWOneTimeTask, BaseCombatTask):
             target=True, time_out=3, raise_if_not_found=False)
 
     def _travel_to_nest_or_skip(self, nest):
+        if self.is_fast_travel_unavailable():
+            self.log_info('nearby beacon cannot be fast traveled, skip this nest')
+            return self._skip_unreachable_nest(nest)
         travel = self.wait_until(self._find_travel_button, raise_if_not_found=False, time_out=1)
         if travel:
             self.click(travel, after_sleep=1)
@@ -172,12 +187,28 @@ class NightmareNestTask(WWOneTimeTask, BaseCombatTask):
                 time_out=120, raise_if_not_found=False):
             return True
 
+        return self._skip_unreachable_nest(nest)
+
+    def is_fast_travel_unavailable(self):
+        # 「附近信标无法快速到达」的红条只出现在图鉴详情页下方的按钮区，用颜色定位以免受语言和多行图标排版影响
+        box = self.box_of_screen(0.68, 0.55, 0.98, 0.95, name='travel_unavailable')
+        return bool(find_color_rectangles(self.frame, travel_unavailable_color,
+                                          self.width_of_screen(0.15), self.height_of_screen(0.02),
+                                          threshold=0.8, box=box))
+
+    def _skip_unreachable_nest(self, nest):
         if isinstance(nest, NestTarget):
             self._unreachable_nests.add(nest.cache_key)
             self.log_info(f'nightmare nest unreachable, skip this run: {nest.cache_key}')
         else:
             self.log_info('nightmare nest unreachable, skip this run')
+        # esc 只关掉详情页，图鉴（挂在地图上）还开着；日常任务里 DailyTask 把 ensure_main 劫持成空实现，
+        # 所以下一轮 openF2Book 既不会补 esc 也不会发 f2（in_team_and_world 为假），wait_book(0.3) 还会把
+        # 正在关闭的图鉴图标当成打开成功（实测 conf=39），之后所有页签都是空扫描、整个梦魇步骤白跑，
+        # 下一个任务还得自己按 esc 回主世界。这里先按 esc 并等回到主世界，再继续下一个巢穴。
         self.back(after_sleep=1)
+        if not self.wait_in_team_and_world(time_out=10, raise_if_not_found=False, esc=True):
+            self.log_info('not back in world after skipping this nest, continue anyway')
         return False
 
     def _find_travel_button(self):

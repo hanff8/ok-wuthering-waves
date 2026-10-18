@@ -2,6 +2,8 @@ import ast
 import unittest
 from pathlib import Path
 
+from src.task.DomainTask import DomainTask
+
 
 class TestDomainRecoveryLoop(unittest.TestCase):
     def setUp(self):
@@ -72,6 +74,52 @@ class TestDomainRecoveryLoop(unittest.TestCase):
             for node in ast.walk(self.method_node)
         )
         self.assertTrue(has_unpack)
+
+
+class TestDomainStaminaShortfall(unittest.TestCase):
+    """日常活跃度没满、体力又凑不满 180 时, 仍要用现有体力刷本。"""
+
+    def make_task(self, stamina):
+        task = DomainTask.__new__(DomainTask)
+        task.stamina_once = 40
+        task.open_F2_book_and_get_stamina = lambda: stamina
+        task.sleep = lambda *args, **kwargs: None
+        task.backs = []
+        task.logs = []
+        task.teleports = []
+        task.farm_calls = []
+        task.back = lambda *args, **kwargs: task.backs.append(kwargs)
+        task.log_info = lambda message, **kwargs: task.logs.append(message)
+        task.teleport_into_domain_once = lambda: task.teleports.append(1)
+        task.farm_in_domain = lambda must_use=0: (task.farm_calls.append(must_use), (True, must_use))[1]
+        return task
+
+    def test_farms_with_available_stamina_when_daily_requirement_is_not_met(self):
+        task = self.make_task((99, 63, 162))
+
+        task.farm_domain_with_recovery_loop(180, task.teleport_into_domain_once)
+
+        self.assertEqual([1], task.teleports)
+        self.assertEqual([162], task.farm_calls)
+        self.assertEqual([], task.backs)
+        self.assertTrue(any('farm 162 instead' in message for message in task.logs))
+
+    def test_keeps_daily_requirement_when_stamina_is_enough(self):
+        task = self.make_task((240, 63, 303))
+
+        task.farm_domain_with_recovery_loop(180, task.teleport_into_domain_once)
+
+        self.assertEqual([1], task.teleports)
+        self.assertEqual([180], task.farm_calls)
+
+    def test_aborts_when_stamina_is_below_one_run(self):
+        task = self.make_task((20, 0, 20))
+
+        task.farm_domain_with_recovery_loop(180, task.teleport_into_domain_once)
+
+        self.assertEqual([], task.teleports)
+        self.assertEqual([{}], task.backs)
+        self.assertIn('not enough stamina', task.logs)
 
 
 if __name__ == "__main__":

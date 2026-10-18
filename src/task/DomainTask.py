@@ -59,10 +59,15 @@ class DomainTask(WWOneTimeTask, BaseCombatTask):
         self.realm_entry_at_heal_point = False
         while True:
             current, _, total = self.open_F2_book_and_get_stamina()
-            if total < self.stamina_once or total < must_use or (must_use == 0 and current < self.stamina_once):
+            if total < self.stamina_once or (must_use == 0 and current < self.stamina_once):
                 self.log_info('not enough stamina', notify=True)
                 self.back()
                 return
+            if total < must_use:
+                # 日常剩余额度(180-已用波片)大于现有体力时, 用现有体力尽量刷, 而不是直接放弃整个日常刷本
+                self.log_info(f'not enough stamina for daily requirement {must_use}, farm {total} instead',
+                              notify=True)
+                must_use = total
             teleport_into_domain_once()
             self.sleep(1)
             finished, must_use = self.farm_in_domain(must_use=must_use)
