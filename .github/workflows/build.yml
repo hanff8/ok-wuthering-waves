@@ -281,7 +281,6 @@ jobs:
               * 不要下载 ok-ww-win32.zip 和 SourceCode.zip, Do Not Download the SourceCode, ok-ww-win32.zip
             ### 说明
               * 这是 fork (hanff8/ok-wuthering-waves) 的自动构建产物，**未做代码签名**，首次运行可能触发 SmartScreen 提示。
-              * 应用内自动更新仍指向上游更新仓库；如需更新只跟随本 fork，请另建更新仓库并配置同步。
           draft: false
           prerelease: ${{ steps.version.outputs.is_release != 'true' }}
           files: pyappify_dist/*
