@@ -23,6 +23,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_nest_is_checked_before_nightmare_changes_book_scroll(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task.config = {'Which to Farm': ['Nightmare Purification', 'Tacet Discord Nest']}
         task._init_queue()
         self.assertEqual(['go_nest', 'go_nest_scroll', 'go_nightmare', 'go_nightmare_scroll'],
@@ -30,6 +31,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_capture_success_clears_combat_before_post_combat_waits(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task._capture_mode = True
         task._in_combat = True
         picked = []
@@ -53,6 +55,7 @@ class TestNightmareNestTask(unittest.TestCase):
         for feature_name in ('team_close', 'fast_travel_custom'):
             with self.subTest(feature_name=feature_name):
                 task = NightmareNestTask.__new__(NightmareNestTask)
+                task.tr = str
                 task._capture_mode = False
                 task._capture_success = False
                 combat_calls = []
@@ -82,6 +85,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_capture_mode_does_not_check_combat_after_pickup(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task._capture_mode = True
         task.wait_combat = lambda **kwargs: self.fail('capture mode should leave after obtaining an echo')
 
@@ -89,6 +93,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_unreachable_nest_is_cached_when_travel_does_not_enter_world(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task._unreachable_nests = set()
         backs = []
         clicks = []
@@ -205,6 +210,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_nest_is_skipped_after_max_deaths(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task._capture_mode = False
         task._capture_success = False
         task._unreachable_nests = set()
@@ -233,6 +239,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_travel_waits_up_to_120_seconds_for_loading(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task._unreachable_nests = set()
         travel = FakeBox('fast_travel_custom')
         world_waits = []
@@ -248,6 +255,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_find_nest_skips_cached_unreachable_row(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task.count_re = re.compile(r"(\d{1,2})/(\d{1,2})")
         task.queues = [lambda: None]
         task._unreachable_nests = {'<lambda>:36:10'}
@@ -277,6 +285,7 @@ class TestNightmareNestTask(unittest.TestCase):
 
     def test_cache_key_ignores_small_ocr_position_jitter(self):
         task = NightmareNestTask.__new__(NightmareNestTask)
+        task.tr = str
         task.queues = [lambda: None]
         task.height_of_screen = lambda value: 1000 * value
 

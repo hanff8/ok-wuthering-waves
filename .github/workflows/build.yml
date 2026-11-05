@@ -62,9 +62,7 @@ jobs:
             pyproject.toml
 
       - name: Install dependencies
-        run: |
-          python -m pip install -r requirements.txt
-          python -m pip install ".[dev]"
+        run: python .github/scripts/install_dependencies.py
 
       - name: Run tests
         timeout-minutes: 30
@@ -139,9 +137,7 @@ jobs:
             pyproject.toml
 
       - name: Install dependencies
-        run: |
-          python -m pip install -r requirements.txt
-          python -m pip install ".[dev]"
+        run: python .github/scripts/install_dependencies.py
 
       - name: Prepare release requirements
         env:
@@ -190,9 +186,7 @@ jobs:
             pyproject.toml
 
       - name: Install dependencies
-        run: |
-          python -m pip install -r requirements.txt
-          python -m pip install ".[dev]"
+        run: python .github/scripts/install_dependencies.py
 
       # 把 ok / pyappify 内联进仓库，并把 config.py 的版本号写成 tag 号；
       # workflow_dispatch（非 tag）时保持仓库自带版本号。
