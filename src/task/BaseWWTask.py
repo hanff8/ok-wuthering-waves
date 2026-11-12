@@ -32,6 +32,9 @@ f_white_color = {
 }
 processed_feature = False
 WIDE_MODE_UI_SCALE = 0.75
+# 编队界面的判据。team_close 是可交互按钮, 鼠标悬停时会放大变形, 匹配分数掉到 0.62;
+# team_start_challenge 在同一帧不随悬停变化, 且下一步本来就要点它。
+TEAM_SCREEN_FEATURES = ('team_start_challenge', 'team_close')
 
 
 class BaseWWTask(BaseTask):
