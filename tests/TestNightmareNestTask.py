@@ -96,6 +96,7 @@ class TestNightmareNestTask(unittest.TestCase):
             return FakeBox('team_start_challenge')
 
         task.click = lambda *args, **kwargs: None
+        task.is_fast_travel_unavailable = lambda: False
         task.wait_feature = wait_feature
         task.click_team_challenge = lambda: challenge_clicks.append(True)
         task.wait_in_team_and_world = lambda *args, **kwargs: True
