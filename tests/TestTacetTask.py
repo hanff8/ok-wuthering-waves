@@ -43,6 +43,19 @@ class TestTacetTaskTeleport(unittest.TestCase):
         self.assertEqual([{'after_sleep': 1}], backs)
         self.assertEqual([{'time_out': 10, 'raise_if_not_found': False, 'esc': True}], world_waits)
 
+    def test_team_start_challenge_is_not_clicked_as_travel_button(self):
+        # click_on_book_target 在组队界面可能把 team_start_challenge 认成置信度最高的特征。
+        # 它不是「前往」按钮；在这里点掉后 farm_tacet 的 click_team_challenge 会等不到它而
+        # 10 秒超时，整个日常任务被中断（见 2026-11-19 22:20 的日志）。
+        task = self.make_task()
+        task.click_on_book_target = lambda serial, total, structure=None: (
+                setattr(task, '_travel_feature', 'team_start_challenge') or True)
+        clicks = []
+        task.wait_click_feature = lambda *args, **kwargs: clicks.append((args, kwargs)) or True
+
+        self.assertTrue(task.teleport_to_tacet(1))
+        self.assertEqual([], clicks)
+
     def test_travel_button_path_also_clicks_fast_travel_before_team_screen(self):
         task = self.make_task()
         task.click_on_book_target = lambda serial, total, structure=None: (setattr(task, '_travel_feature',
