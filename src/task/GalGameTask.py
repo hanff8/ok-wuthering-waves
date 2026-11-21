@@ -350,8 +350,21 @@ class GalGameTask(BaseTask):
         return sum(1 for row in rows if self._row_has_astrite(row.center()[1]))
 
     def _claim_rewards(self, title, button):
-        self.click(button, after_sleep=.55)
-        if not self.wait_until(lambda: self._reward_page(title), time_out=5):
+        opened = False
+        for attempt in range(3):
+            if attempt > 0:
+                boxes = self._read()
+                if self._label(boxes, "档案管理", (0, 0, .2, .12), contains=True):
+                    self.click(.954, .068, after_sleep=.65)
+                    boxes = self._read()
+                elif self._tutorial(boxes):
+                    boxes = self._read()
+                button = self._label(boxes, title, (0, .42, .2, .9)) or button
+            self.click(button, after_sleep=.55)
+            if self.wait_until(lambda: self._reward_page(title), time_out=2.5):
+                opened = True
+                break
+        if not opened:
             raise RuntimeError(f"无法打开{title}。")
 
         for _ in range(8):
@@ -387,8 +400,18 @@ class GalGameTask(BaseTask):
             button = self._label(boxes, title, (0, .42, .2, .9))
             if button:
                 self._claim_rewards(title, button)
-                boxes = self.wait_until(lambda: (frame if parent(frame := self._read())
-                                                 else None), time_out=6)
+                boxes = None
+                for _ in range(3):
+                    boxes = self.wait_until(lambda: (frame if parent(frame := self._read())
+                                                     else None), time_out=2.5)
+                    if boxes:
+                        self.sleep(.35)
+                        settled = self._read()
+                        if parent(settled):
+                            boxes = settled
+                        break
+                    if self._reward_page(title):
+                        self.click(.954, .067, after_sleep=.7)
                 if not boxes:
                     raise RuntimeError("领取奖励后无法返回活动菜单。")
         if self._claim_log:
@@ -486,13 +509,19 @@ class GalGameTask(BaseTask):
             ("此处会显示当前历程的", (.938, .234)),
             ("可以邀请伙伴外出或赠送礼物", (.326, .5)),
             ("可进行【档案存储】", (.954, .067)),
+            ("点击【档案存储】", (.382, .808)),
             ("可查看个人信息与角色好感度", (.246, .68)),
             ("角色会发布【限时】任务", (.655, .49)),
             ("需要连续占用多天的日程", (.516, .27)),
+            ("执行【休息】类行为后", (.773, .15)),
         ):
             if self._label(boxes, text, contains=True):
                 self.click(*point, after_sleep=.65)
                 return True
+        if (self._label(boxes, "A", (.22, .75, .30, .86))
+                and self._label(boxes, "D", (.70, .75, .78, .86))):
+            self.click(.963, .225, after_sleep=.55)
+            return True
         return False
 
     def _stage_goal(self, boxes):
@@ -624,6 +653,9 @@ class GalGameTask(BaseTask):
     def _schedule_activity(self, tab, activities):
         self.click(tab, .15, after_sleep=.45)
         cards = self._read()
+        if self._tutorial(cards):
+            self.click(tab, .15, after_sleep=.45)
+            cards = self._read()
         for activity in activities:
             if card := self._label(cards, activity, (.66, .2, .83, .74), contains=True):
                 _, y = card.center()
@@ -636,6 +668,8 @@ class GalGameTask(BaseTask):
             return self._schedule_tabs[date]
         self.click(.654, .15, after_sleep=.45)
         boxes = self._read()
+        if self._tutorial(boxes):
+            boxes = self._read()
         tab = self.frame[round(.135 * self.height):round(.177 * self.height),
                          round(.64 * self.width):round(.67 * self.width)]
         hsv = cv2.cvtColor(tab, cv2.COLOR_BGR2HSV)
