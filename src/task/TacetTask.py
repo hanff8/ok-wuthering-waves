@@ -1,7 +1,7 @@
 from ok import Logger
 from ok.task.exceptions import WaitFailedException
 from src.task.BaseCombatTask import BaseCombatTask, CharRevivedException
-from src.task.BaseWWTask import TEAM_SCREEN_FEATURES
+from src.task.BaseWWTask import RECHALLENGE_TEXT, TEAM_SCREEN_FEATURES
 from src.task.WWOneTimeTask import WWOneTimeTask
 from src.task.task_icons import task_icon
 
